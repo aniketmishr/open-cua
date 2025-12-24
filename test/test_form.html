@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Playwright Test Form</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .spacer {
+            height: 300px;
+        }
+
+        label {
+            display: block;
+            margin-top: 20px;
+        }
+
+        #result {
+            margin-top: 40px;
+            padding: 20px;
+            border: 2px solid #4CAF50;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Test Form</h1>
+
+<p>This page is intentionally long to test scrolling behavior.</p>
+
+<form id="test-form">
+
+    <!-- Top inputs -->
+    <label>
+        Name:
+        <input id="name-input" type="text" />
+    </label>
+
+    <label>
+        Email:
+        <input id="email-input" type="email" />
+    </label>
+
+    <!-- Create vertical length -->
+    <div class="spacer"></div>
+
+    <!-- Middle inputs -->
+    <label>
+        Address:
+        <input id="address-input" type="text" />
+    </label>
+
+    <label>
+        City:
+        <input id="city-input" type="text" />
+    </label>
+
+    <div class="spacer"></div>
+
+    <!-- Bottom inputs -->
+    <label>
+        Comments:
+        <textarea id="comments-input" rows="4" cols="40"></textarea>
+    </label>
+
+    <div class="spacer"></div>
+
+    <!-- Submit -->
+    <button id="submit-button" type="submit">
+        Submit
+    </button>
+</form>
+
+<!-- Result section -->
+<div id="result">
+    <h2>Submitted Details</h2>
+    <p id="result-name"></p>
+    <p id="result-email"></p>
+    <p id="result-address"></p>
+    <p id="result-city"></p>
+    <p id="result-comments"></p>
+</div>
+
+<script>
+    const form = document.getElementById("test-form");
+
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        document.getElementById("result-name").textContent =
+            "Name: " + document.getElementById("name-input").value;
+
+        document.getElementById("result-email").textContent =
+            "Email: " + document.getElementById("email-input").value;
+
+        document.getElementById("result-address").textContent =
+            "Address: " + document.getElementById("address-input").value;
+
+        document.getElementById("result-city").textContent =
+            "City: " + document.getElementById("city-input").value;
+
+        document.getElementById("result-comments").textContent =
+            "Comments: " + document.getElementById("comments-input").value;
+
+        document.getElementById("result").style.display = "block";
+    });
+</script>
+
+</body>
+</html>
