@@ -96,22 +96,6 @@ async def execute_actions(agent_output: CUAOutput, computer: PlaywrightComputer)
 
     return state
 
-async def get_playwright_instance(): 
-    # Initialize playwright computer instance
-    # Define user_data_dir path
-    profile_name = 'browser_profile_for_cua'
-    profile_path = os.path.join(tempfile.gettempdir(), profile_name)
-    os.makedirs(profile_path, exist_ok=True)
-
-    p = PlaywrightComputer(
-        screen_size=(936, 684),
-        user_data_dir=profile_path,
-        highlight_mouse=True
-    ) 
-    await p.initialize()
-    await asyncio.sleep(3)  # TODO(TO REMOVE)
-    return p
-
 
 async def cua_agent_loop(user_task: str, messages: List[any], computer: PlaywrightComputer, MAX_STEPS = 10): 
     """Run the CUA loop"""
