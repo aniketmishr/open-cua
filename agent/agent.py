@@ -1,179 +1,89 @@
-# Agent Implementation using openai 
+
 import asyncio
-from openai import OpenAI
-from utils.prompts import OS_SYSTEM_PROMPT
-from typing import List, Dict, Literal, Union
-from pydantic import BaseModel, Field
-from computer.playwright import PlaywrightComputer, ComputerState
-import os, tempfile
+import opik 
+from agent.model import get_agent_next_step
+from agent.schema import AgentStep, Click,Hover,DragAndDrop,Search,Type, Scroll, GoBack,Key,Navigate,Wait,Terminate
+from agent.prompts import OS_SYSTEM_PROMPT
+from computer.playwright import ComputerState
+from computer.base_computer import BaseComputer
 from dotenv import load_dotenv
 
 load_dotenv()
-MODEL = "gpt-5-mini"
 
-
-# Structured Output
-class ClickAction(BaseModel): 
-    type : Literal["click"]
-    x: float = Field(..., description="x coordinate of screen")
-    y: float = Field(..., description="y coordinate of screen") 
-
-class TypeAction(BaseModel): 
-    type: Literal["type"]
-    text : str = Field(..., description="Text to type")
-
-class ScrollAction(BaseModel): 
-    type : Literal["scroll"]
-    x: int
-    y: int
-    direction: Literal["up", "down", "left", "right"]
-    magnitude: int
-
-class WaitAction(BaseModel): 
-    type : Literal["wait"]
-    seconds: float = Field(..., ge=0)
-
-class DoneAction(BaseModel): 
-    type : Literal["done"]
-
-Action = Union[
-    ClickAction, 
-    TypeAction, 
-    ScrollAction, 
-    WaitAction, 
-    DoneAction
-]
-
-class CUAOutput(BaseModel): 
-    thought : str = Field(..., description="Short reasoning about the current screen and goal")
-    actions : List[Action] = Field(..., 
-                                   min_length= 1,
-                                   description="Ordered list of actions to execute sequentially")
-
-client = OpenAI()
-
-
-def create_response(messages:List[Dict]): 
-    response = client.chat.completions.parse(
-        model=MODEL, 
-        messages=messages, 
-        response_format=CUAOutput
-    )
-    return response.choices[0].message.parsed # return pydantic object CUAOutput
-
-async def execute_actions(agent_output: CUAOutput, computer: PlaywrightComputer) -> Union[ComputerState, str]:
-    """
-    Execute a single parsed action on the computer.
-    """
-    for action in agent_output.actions: 
-        # screen_width, screen_height = computer.get_dimensions() 
-
-        if action.type== "click":
-            state = await computer.click_at(action.x, action.y)
-
-        # elif action_type == "double_click":
-        #     computer.double_click(action_param["x"]*screen_width, action_param["y"]*screen_height)
-
-        elif action.type == "type":
-            state = await computer.type_text(text=action.text)
-
-        elif action.type == "scroll":
-            state = await computer.scroll_at(
-                action.x, 
-                action.y, 
-                action.direction, 
-                action.magnitude       # Computer Scroll takes diff. input format TODO('fix paramenter mismatch')
-            )
-
-        elif action.type == "wait":
-            state = await computer.wait(action.seconds)
-
-        elif action.type == "done":
-            return "done"
-
-        else:
-            raise ValueError(f"Unknown action: {action}")
-
-    return state
-
-
-async def cua_agent_loop(user_task: str, messages: List[any], computer: PlaywrightComputer, MAX_STEPS = 10): 
-    """Run the CUA loop"""
-    # Capture Screenshot (first interaction)
-    await asyncio.sleep(3)  # TODO(TO REMOVE)
-    state: ComputerState = await computer.current_state()
-    messages.append(
-        {
-            "role": "user",
-            "content": [
-                {'type': 'text', 'text': user_task}, 
-                {'type': 'image_url', 'image_url': {
-                    "url" : f"data:image/png;base64,{state.screenshot}"
-                }}
-            ]
-        }
-    )
-    C_STEP=0 ## For loop counter
-    while True: 
-        # Loop couter logic 
-        C_STEP+=1
-        if C_STEP>MAX_STEPS: 
-            print("Exceeded loop count limit")
-            break
-
-        # call model 
-        step = create_response(messages)
-        print("\n[MODEL OUTPUT]")
-        print(step)
-
-        # execute action 
-        state = await execute_actions(step, computer)
-
-        if state == "done": 
-            print("[INFO] Task completed")
-            break
-
-        # Capture observation
-        messages.append(
+class Agent:
+    def __init__(self, computer: BaseComputer ,model: str = "openai/gpt-5-mini",system_prompt: str = ""):
+        self.model = model 
+        self.system = system_prompt
+        self.computer = computer
+        self.messages = []
+        if self.system: 
+            self.messages.append({"role": "system", "content": self.system})
+    @opik.track
+    async def _decide(self, message: str, state: ComputerState):
+        self.messages.append(
             {
-                'role': 'user', 
-                'content' : [
-                    {'type': 'text', 'text': 'Observation after previous action'}, 
+                "role": "user",
+                "content": [
+                    {'type': 'text', 'text': message}, 
                     {'type': 'image_url', 'image_url': {
-                        'url' : f"data:image/png;base64,{state.screenshot}"
+                        "url" : f"data:image/png;base64,{state.screenshot}"
                     }}
                 ]
             }
         )
-                    
+        result = await get_agent_next_step(self.model, messages=self.messages)
+        self.messages.append({"role": "assistant", "content" : str(result.model_dump_json())})  # Stores structred output in messages as assistant response
+        return result
+    
+    async def _execute(self, step: AgentStep) -> ComputerState:
+        action = step.action
+        if isinstance(action, Click): 
+            state = await self.computer.click_at(action.x, action.y)
+        elif isinstance(action, Hover): 
+            state = await self.computer.hover_at(action.x, action.y)
+        elif isinstance(action, DragAndDrop): 
+            state = await self.computer.drag_and_drop(action.x, action.y, action.destination_x, action.destination_y)
+        elif isinstance(action, Search): 
+            state = await self.computer.search(action.query, action.search_engine)
+        elif isinstance(action, Type): 
+            state = await self.computer.type_text_at(action.x, action.y, action.text, action.press_enter, action.clear_before_typing)
+        elif isinstance(action, Scroll): 
+            state = await self.computer.scroll_at(action.x, action.y, action.direction, action.magnitude)
+        elif isinstance(action, GoBack): 
+            state = await self.computer.go_back()
+        elif isinstance(action, Key): 
+            state = await self.computer.key_combination(action.keys)
+        elif isinstance(action, Navigate): 
+            state = await self.computer.navigate(action.url)
+        elif isinstance(action, Wait): 
+            state = await self.computer.wait(action.seconds)
+        else: 
+            raise ValueError("Invalid Action type")
+        return state 
+    @opik.track
+    async def run(self, task: str, max_turns = 10):
+        await self.computer.wait_for_load_state() 
+        state: ComputerState = await self.computer.current_state()
+        message = task
+        c = 0
+        while c<max_turns: 
+            # Decide next agent step 
+            step = await self._decide(message,state)
+            print("\n[MODEL OUTPUT]")
+            print(step)
 
-async def main(): 
-    user_task = input("Task > ")
-    messages = []
+            # Check if task is terminated
+            if isinstance(step.action, Terminate): 
+                print(f"[INFO] Task Status : {step.action.status}")
+                if step.action.result: 
+                    print(f"[INFO] Task Result : {step.action.result}") 
+                return step.action
 
-    # Initialize playwright computer instance
-    # Define user_data_dir path
-    profile_name = 'browser_profile_for_cua'
-    profile_path = os.path.join(tempfile.gettempdir(), profile_name)
-    os.makedirs(profile_path, exist_ok=True)
+            # execute action 
+            state = await self._execute(step)
 
-    async with PlaywrightComputer(
-        screen_size=(936, 684),
-        user_data_dir=profile_path,
-        highlight_mouse=True
-    ) as computer:  
-        width, height = await computer.screen_size()
-        print(f"[INFO] Screen size: {width}x{height}")
-        messages.append(
-            {
-                "role": "system",
-                "content": OS_SYSTEM_PROMPT.format(screen_dimension = f"({width} x {height})")
-            }
-        )
+            # observation
+            message = "Observation: Action executed successfully. "
 
-        await cua_agent_loop(user_task=user_task, messages=messages,computer=computer)
-
-
-
-if __name__ == "__main__": 
-    asyncio.run(main())
+            # Increase the counter
+            c+=1
