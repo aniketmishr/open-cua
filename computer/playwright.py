@@ -9,6 +9,7 @@ from typing import Optional
 from .base_computer import BaseComputer
 from .base_computer import ComputerEnvironment
 from .base_computer import ComputerState
+from utils import build_search_url
 from playwright.async_api import async_playwright
 import termcolor
 import base64
@@ -64,7 +65,7 @@ PLAYWRIGHT_KEY_MAP = {
 
 class PlaywrightComputer(BaseComputer):
   """Computer that controls Chromium via Playwright."""
-
+  computer_env: ComputerEnvironment = ComputerEnvironment.ENVIRONMENT_LOCAL_PLAYWRIGHT
   def __init__(
       self,
       screen_size: tuple[int, int],
@@ -167,9 +168,9 @@ class PlaywrightComputer(BaseComputer):
   async def open_web_browser(self) -> ComputerState:
     return await self.current_state()
 
-  async def click_at(self, x: int, y: int):
+  async def click_at(self, x: int, y: int, button: Literal["left", "middle", "right"] = "left"):
     await self.highlight_mouse(x, y)
-    await self._page.mouse.click(x, y)
+    await self._page.mouse.click(x, y, button=button)
     await self._page.wait_for_load_state()
     return await self.current_state()
 
@@ -292,8 +293,9 @@ class PlaywrightComputer(BaseComputer):
     await self._page.wait_for_load_state()
     return await self.current_state()
 
-  async def search(self) -> ComputerState:
-    return await self.navigate(self._search_engine_url)
+  async def search(self, query: str, search_engine: Literal["google", "bing", "duckduckgo", "yahoo"] = "google") -> ComputerState:
+    search_url  = build_search_url(query, search_engine)
+    return await self.navigate(search_url)
 
   async def navigate(self, url: str) -> ComputerState:
     await self._page.goto(url)
@@ -342,6 +344,9 @@ class PlaywrightComputer(BaseComputer):
 
   async def screen_size(self) -> tuple[int, int]:
     return self._screen_size
+  
+  async def wait_for_load_state(self): 
+    await self._page.wait_for_load_state()
 
   async def highlight_mouse(self, x: int, y: int):
     if not self._highlight_mouse:

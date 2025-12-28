@@ -1,15 +1,8 @@
 
-#http://www.apache.org/licenses/LICENSE-2.0
-
-
-# from __future__ import annotations
-
 import abc
 from enum import Enum
 from typing import Literal, Union
 from typing import Optional
-import base64
-
 import pydantic
 
 class ComputerEnvironment(str, Enum):
@@ -19,6 +12,7 @@ class ComputerEnvironment(str, Enum):
   """Defaults to browser."""
   ENVIRONMENT_BROWSER = "ENVIRONMENT_BROWSER"
   """Operates in a web browser."""
+  ENVIRONMENT_LOCAL_PLAYWRIGHT = "ENVIRONMENT_LOCAL_PLAYWRIGHT"
 
 
 class ComputerState(pydantic.BaseModel):
@@ -42,7 +36,7 @@ class BaseComputer(abc.ABC):
   This abstract base class async defines the standard interface for controlling
   computer environments, including web browsers and other interactive systems.
   """
-
+  
   @abc.abstractmethod
   async def screen_size(self) -> tuple[int, int]:
     """Returns the screen size of the environment.
