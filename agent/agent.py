@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+opik.set_tracing_active(True)
+
 class Agent:
     def __init__(self, computer: BaseComputer ,model: str = "openai/gpt-5-mini",system_prompt: str = ""):
         self.model = model 
