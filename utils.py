@@ -6,7 +6,7 @@ from PIL import Image
 from io import BytesIO
 import io
 from urllib.parse import urlparse
-
+from urllib.parse import urlencode
 load_dotenv(override=True)
 
 BLOCKED_DOMAINS = [
@@ -17,6 +17,26 @@ BLOCKED_DOMAINS = [
     "suspiciouspins.com",
     "ilanbigio.com",
 ]
+
+def build_search_url(query: str, engine: str = "google") -> str:
+    """
+    Build a search URL for a given query and search engine.
+
+    Supported engines: google, bing, duckduckgo, yahoo
+    """
+    engines = {
+        "google": "https://www.google.com/search",
+        "bing": "https://www.bing.com/search",
+        "duckduckgo": "https://duckduckgo.com/",
+        "yahoo": "https://search.yahoo.com/search",
+    }
+
+    engine = engine.lower()
+    if engine not in engines:
+        raise ValueError(f"Unsupported search engine: {engine}")
+
+    params = urlencode({"q": query})
+    return f"{engines[engine]}?{params}"
 
 
 def pp(obj):
@@ -44,25 +64,6 @@ def sanitize_message(msg: dict) -> dict:
             sanitized["output"] = {**output, "image_url": "[omitted]"}
             return sanitized
     return msg
-
-
-def create_response(**kwargs):
-    url = "https://api.openai.com/v1/responses"
-    headers = {
-        "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-        "Content-Type": "application/json"
-    }
-
-    openai_org = os.getenv("OPENAI_ORG")
-    if openai_org:
-        headers["Openai-Organization"] = openai_org
-
-    response = requests.post(url, headers=headers, json=kwargs)
-
-    if response.status_code != 200:
-        print(f"Error: {response.status_code} {response.text}")
-
-    return response.json()
 
 
 def check_blocklisted_url(url: str) -> None:
